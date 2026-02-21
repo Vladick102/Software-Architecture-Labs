@@ -1,0 +1,34 @@
+services:
+  facade-service:
+    build: ./facade-service
+    container_name: facade-service
+    ports:
+      - "8080:8080"
+    environment:
+      - LOGGING_SERVICE_URL=http://logging-service:8081
+      - COUNTER_SERVICE_URL=http://counter-service:8082
+    depends_on:
+      - logging-service
+      - counter-service
+    networks:
+      - bank-network
+
+  logging-service:
+    build: ./logging-service
+    container_name: logging-service
+    ports:
+      - "8081:8081"
+    networks:
+      - bank-network
+
+  counter-service:
+    build: ./counter-service
+    container_name: counter-service
+    ports:
+      - "8082:8082"
+    networks:
+      - bank-network
+
+networks:
+  bank-network:
+    driver: bridge

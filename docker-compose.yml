@@ -1,34 +1,61 @@
 services:
-  facade-service:
-    build: ./facade-service
-    container_name: facade-service
+  hazelcast1:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast1
+    environment:
+      - HZ_CLUSTERNAME=dev
+      - HZ_NETWORK_PUBLICADDRESS=localhost:5701
+      - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.xml
+    ports:
+      - "5701:5701"
+    volumes:
+      - ./hazelcast.xml:/opt/hazelcast/config/hazelcast.xml
+    networks:
+      - hazelcast-net
+
+  hazelcast2:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast2
+    environment:
+      - HZ_CLUSTERNAME=dev
+      - HZ_NETWORK_PUBLICADDRESS=localhost:5702
+      - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.xml
+    ports:
+      - "5702:5701"
+    volumes:
+      - ./hazelcast.xml:/opt/hazelcast/config/hazelcast.xml
+    networks:
+      - hazelcast-net
+
+  hazelcast3:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast3
+    environment:
+      - HZ_CLUSTERNAME=dev
+      - HZ_NETWORK_PUBLICADDRESS=localhost:5703
+      - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.xml
+    ports:
+      - "5703:5701"
+    volumes:
+      - ./hazelcast.xml:/opt/hazelcast/config/hazelcast.xml
+    networks:
+      - hazelcast-net
+
+  management-center:
+    image: hazelcast/management-center:5.3
+    container_name: hazelcast-mancenter
+    environment:
+      - MC_DEFAULT_CLUSTER=dev
+      - MC_DEFAULT_CLUSTER_MEMBERS=hazelcast1:5701,hazelcast2:5701,hazelcast3:5701
     ports:
       - "8080:8080"
-    environment:
-      - LOGGING_SERVICE_URL=http://logging-service:8081
-      - COUNTER_SERVICE_URL=http://counter-service:8082
+    networks:
+      - hazelcast-net
     depends_on:
-      - logging-service
-      - counter-service
-    networks:
-      - bank-network
-
-  logging-service:
-    build: ./logging-service
-    container_name: logging-service
-    ports:
-      - "8081:8081"
-    networks:
-      - bank-network
-
-  counter-service:
-    build: ./counter-service
-    container_name: counter-service
-    ports:
-      - "8082:8082"
-    networks:
-      - bank-network
+      - hazelcast1
+      - hazelcast2
+      - hazelcast3
 
 networks:
-  bank-network:
+  hazelcast-net:
     driver: bridge

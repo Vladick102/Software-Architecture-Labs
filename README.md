@@ -1,67 +1,124 @@
-# Microservices Basics Lab
+# Lab 2 - Hazelcast Distributed Data Structures
 
-This project demonstrates a simple microservices architecture with three services communicating via HTTP.
-
-## Architecture
-
-The system consists of three services:
-
-- Facade Service (Port 8080) - Main entry point that coordinates requests between services
-- Logging Service (Port 8081) - Handles logging of operations
-- Counter Service (Port 8082) - Manages request counters
-
-All services are containerized using Docker and orchestrated with Docker Compose.
-
-## Running the Application
-
-Start all services:
 ```bash
-docker-compose up --build
+pip install -r requirements.txt
+
+docker compose up -d
+
+# Wait ~20 s for the cluster to form, then run any script
+python src/task3_distributed_map.py
+python src/task7_compare_locks.py
+python src/task8_bounded_queue.py
+
+# OR run everything at once
+bash run_all.sh
 ```
 
-Test the basic functionality:
+**HazelCast Management Center** - http://localhost:8080
+
+---
+
+## Task descriptions
+
+### Task 3 - Distributed Map (1000 entries)
+
+`task3_distributed_map.py` connects to the 3-node cluster and:
+- writes 1000 `key -> value_N` pairs into the `capitals` map
+- reads all 1000 back and reports missing/mismatched entries
+
 ```bash
-python test_client.py
+# Stop ONE node - data should still be intact (backup-count=1)
+docker stop hazelcast2
+python src/task3_distributed_map.py
+
+# Stop TWO nodes SEQUENTIALLY
+docker stop hazelcast2
+docker stop hazelcast3
+python src/task3_distributed_map.py
+
+# Stop TWO nodes SIMULTANEOUSLY (emulating crash)
+docker stop hazelcast2 hazelcast3
+python src/task3_distributed_map.py
+
+# Restore cluster
+docker compose up -d
 ```
 
-Optional test arguments:
-- `--scenario {1|2}` - Run specific scenario (default: run both)
-- `--clients N` - Number of concurrent clients (default: 10)
-- `--t N` - Transactions per client (default: 10000)
+**Data loss analysis:**
+| Scenario | backup-count=1 | backup-count=2 |
+|---|---|---|
+| 1 node fails | No loss | No loss |
+| 2 nodes fail sequentially | Possible loss | No loss |
+| 2 nodes fail simultaneously | Possible loss | No loss |
 
-Example:
-```bash
-python test_client.py --scenario 1 --clients 5 --t 5000
+![Task 3](screenshots/task3.png)
+
+---
+
+### Task 4 - No-Lock Increment
+
+Three Python processes each do 10 000 read-increment-write cycles **without** any locking.
+
+Expected final value: 30 000 
+Actual: significantly less due to lost updates (race condition).
+
+![Task 4](screenshots/task4.png)
+
+---
+
+### Task 5 - Pessimistic Lock
+
+Uses `map.lock(key)` / `map.unlock(key)` to serialise all writes.
+
+Final value: exactly 30 000
+Trade-off: slower because all processes queue up waiting for the lock.
+
+![Task 5](screenshots/task5.png)
+
+---
+
+### Task 6 - Optimistic Lock (CAS)
+
+Uses `map.replace_if_same(key, old_val, new_val)` - a compare-and-swap operation.  
+On conflict the worker reads the latest value and retries.
+
+Final value: exactly 30 000
+Trade-off: faster than pessimistic under low-to-medium contention; generates retries under
+high contention.
+
+![Task 6](screenshots/task6.png)
+
+---
+
+### Task 7 - Comparison
+
+`task7_compare_locks.py` runs all three strategies back-to-back and prints a table:
+
+```
+  Strategy              Result  Expected      Lost     Time
+
+  No Lock               18 432    30 000    11 568   1.234s
+  Pessimistic           30 000    30 000         0  12.500s
+  Optimistic            30 000    30 000         0   8.300s
 ```
 
-Stop all services:
-```bash
-docker-compose down
-```
+Outcome: optimistic locking is faster than pessimistic: ~22s vs ~34s.
 
-## Testing
+![Task 7](screenshots/task7.png)
 
-### Basic Functionality
-![Basic Functionality](screenshots/basic_functionality.png)
+---
 
-### Scenario 1
-![Scenario 1](screenshots/scenario1.png)
+### Task 8 - Bounded Queue
 
-### Scenario 2
-![Scenario 2](screenshots/scenario2.png)
-![Scenario 2 (with docker-compose down)](screenshots/scenario2_end.png)
+Queue `bounded-queue` is configured with `<max-size>10</max-size>` in `hazelcast.xml`.
 
+`task8_bounded_queue.py`:
+1. Shows that `offer()` (non-blocking) silently drops messages when the queue is full.
+2. Starts 1 producer (`put()` - blocks on full queue) and 2 consumers (`poll(timeout=3s)`).
+3. Producer sends values 1-100; consumers share them.
 
-## Analysis of the Results
-
-### Scenario 1
-
-The system successfully processed all 100 000 requests in 405.47 seconds, achieving a rate of 246.6 requests per second. The final balance for each of the 10 individual accounts was 10 000, exactly as we wanted. The total time on the facade service was 279 589.1 ms for the logging-service and 269 609.7 ms for the counter-service.
-
-### Scenario 2
-
-Processing the 100 000 requests took 420.69 seconds (it is the real outcome of the test, I swear), resulting in a slightly lower throughput of 237.7 requests per second. The final balance for the reached exactly 100 000, as intended. The time is 312 778.3 ms for the logging-service and 301 241.8 ms for the counter-service.
-
-### Conclusion
-
-Both scenarios executed without errors, demonstrating the basic reliability of the architecture. The slight decrease in requests per second (from 246.6 to 237.7) and the corresponding increase in processing times during Scenario 2 suggest minor contention or synchronization overhead when multiple concurrent clients attempt to update the exact same memory record in the counter-service. Additionally, across both scenarios, the logging-service consistently accounted for a slightly larger portion of the execution time compared to the counter-service.
+Observations:
+- Each message is received by exactly one consumer (no duplicates).
+- The two consumers split the 100 messages roughly 50/50.
+- `put()` blocks whenever the queue reaches capacity 10, unblocking when consumers read.
+- With no consumer running, `offer()` accepts only 10 items then returns `False`.

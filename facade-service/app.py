@@ -1,15 +1,15 @@
 import time
 import uuid
+import random
 from flask import Flask, request, jsonify
 import requests as http_requests
+import os
 
 app = Flask(__name__)
 
-import os
-
-LOGGING_SERVICE_URL = os.environ.get(
-    "LOGGING_SERVICE_URL", "http://logging-service:8081"
-)
+LOGGING_SERVICES = os.environ.get(
+    "LOGGING_SERVICES", "http://logging-service-1:8081,http://logging-service-2:8081,http://logging-service-3:8081"
+).split(",")
 COUNTER_SERVICE_URL = os.environ.get(
     "COUNTER_SERVICE_URL", "http://counter-service:8082"
 )
@@ -19,6 +19,25 @@ timing_stats = {
     "counter_service_total_ms": 0.0,
     "call_count": 0,
 }
+
+def call_logging_service(method, path, **kwargs):
+    urls = LOGGING_SERVICES.copy()
+    random.shuffle(urls)
+    last_err = None
+    for url in urls:
+        try:
+            full_url = f"{url}{path}"
+            if method == 'GET':
+                resp = http_requests.get(full_url, timeout=5, **kwargs)
+            else:
+                resp = http_requests.post(full_url, timeout=5, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except Exception as e:
+            last_err = e
+            print(f"[facade] Error calling logging-service at {url}: {e}")
+            continue
+    raise Exception(f"All logging-service instances failed. Last error: {last_err}")
 
 
 @app.route("/transaction", methods=["POST"])
@@ -40,10 +59,7 @@ def post_transaction():
 
     t0 = time.time()
     try:
-        log_resp = http_requests.post(
-            f"{LOGGING_SERVICE_URL}/transaction", json=payload, timeout=10
-        )
-        log_resp.raise_for_status()
+        log_resp = call_logging_service('POST', '/transaction', json=payload)
     except Exception as e:
         return jsonify({"error": f"logging-service error: {str(e)}"}), 502
     logging_time_ms = (time.time() - t0) * 1000
@@ -88,10 +104,7 @@ def get_user(user_id):
 
     t0 = time.time()
     try:
-        t_resp = http_requests.get(
-            f"{LOGGING_SERVICE_URL}/transactions/{user_id}", timeout=10
-        )
-        t_resp.raise_for_status()
+        t_resp = call_logging_service('GET', f'/transactions/{user_id}')
         t_data = t_resp.json()
     except Exception as e:
         return jsonify({"error": f"logging-service error: {str(e)}"}), 502

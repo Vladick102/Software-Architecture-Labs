@@ -1,34 +1,110 @@
+version: '3.8'
+
 services:
   facade-service:
     build: ./facade-service
-    container_name: facade-service
     ports:
       - "8080:8080"
     environment:
-      - LOGGING_SERVICE_URL=http://logging-service:8081
+      - LOGGING_SERVICES=http://logging-service-1:8081,http://logging-service-2:8081,http://logging-service-3:8081
       - COUNTER_SERVICE_URL=http://counter-service:8082
     depends_on:
-      - logging-service
+      - logging-service-1
+      - logging-service-2
+      - logging-service-3
       - counter-service
     networks:
       - bank-network
 
-  logging-service:
+  logging-service-1:
     build: ./logging-service
-    container_name: logging-service
-    ports:
-      - "8081:8081"
+    environment:
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+    depends_on:
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  logging-service-2:
+    build: ./logging-service
+    environment:
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+    depends_on:
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  logging-service-3:
+    build: ./logging-service
+    environment:
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+    depends_on:
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
     networks:
       - bank-network
 
   counter-service:
     build: ./counter-service
-    container_name: counter-service
     ports:
       - "8082:8082"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/
+    depends_on:
+      - mongo
     networks:
       - bank-network
+
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    networks:
+      - bank-network
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5702:5701"
+    environment:
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    networks:
+      - bank-network
+
+  hazelcast-3:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5703:5701"
+    environment:
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    networks:
+      - bank-network
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - bank-network
+    volumes:
+      - mongo-data:/data/db
 
 networks:
   bank-network:
     driver: bridge
+
+volumes:
+  mongo-data:

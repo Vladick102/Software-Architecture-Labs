@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  config-server:
+    build: ./config-server
+    ports:
+      - "8083:8083"
+    networks:
+      - bank-network
+
+  facade-service:
+    build: ./facade-service
+    ports:
+      - "8080:8080"
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:8083
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+    depends_on:
+      - config-server
+      - logging-service-1
+      - logging-service-2
+      - logging-service-3
+      - counter-service
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  logging-service-1:
+    build: ./logging-service
+    environment:
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8083
+      - SERVICE_NAME=logging-service
+      - HOST=http://logging-service-1:8081
+    depends_on:
+      - config-server
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  logging-service-2:
+    build: ./logging-service
+    environment:
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8083
+      - SERVICE_NAME=logging-service
+      - HOST=http://logging-service-2:8081
+    depends_on:
+      - config-server
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  logging-service-3:
+    build: ./logging-service
+    environment:
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8083
+      - SERVICE_NAME=logging-service
+      - HOST=http://logging-service-3:8081
+    depends_on:
+      - config-server
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  counter-service:
+    build: ./counter-service
+    ports:
+      - "8082:8082"
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/
+      - HAZELCAST_CLUSTER=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8083
+      - SERVICE_NAME=counter-service
+      - HOST=http://counter-service:8082
+    depends_on:
+      - config-server
+      - mongo
+      - hazelcast-1
+      - hazelcast-2
+      - hazelcast-3
+    networks:
+      - bank-network
+
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    networks:
+      - bank-network
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5702:5701"
+    environment:
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    networks:
+      - bank-network
+
+  hazelcast-3:
+    image: hazelcast/hazelcast:5.3
+    ports:
+      - "5703:5701"
+    environment:
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    networks:
+      - bank-network
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    networks:
+      - bank-network
+    volumes:
+      - mongo-data:/data/db
+
+networks:
+  bank-network:
+    driver: bridge
+
+volumes:
+  mongo-data:

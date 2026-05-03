@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: bank
+data:
+  HAZELCAST_CLUSTER_MEMBERS: "hazelcast-0.hazelcast.bank.svc.cluster.local:5701,h\
+    azelcast-1.hazelcast.bank.svc.cluster.local:5701,hazelcast-2.hazelcast.bank\
+    .svc.cluster.local:5701"
+  HAZELCAST_CLUSTER_NAME: "dev"
+
+  QUEUE_NAME: "transactions_queue"
+
+  LOGGING_SERVICE_URL: "http://logging-service.bank.svc.cluster.local:8081"
+  COUNTER_SERVICE_URL: "http://counter-service.bank.svc.cluster.local:8082"
+
+  MONGO_URL: "mongodb://mongodb.bank.svc.cluster.local:27017/"

@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hazelcast
+  namespace: bank
+  labels:
+    app: hazelcast
+spec:
+  clusterIP: None
+  selector:
+    app: hazelcast
+  ports:
+    - name: hazelcast
+      port: 5701
+      targetPort: 5701
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hazelcast
+  namespace: bank
+spec:
+  serviceName: hazelcast
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hazelcast
+  template:
+    metadata:
+      labels:
+        app: hazelcast
+    spec:
+      containers:
+        - name: hazelcast
+          image: hazelcast/hazelcast:5.3
+          ports:
+            - containerPort: 5701
+          env:
+            - name: HZ_NETWORK_JOIN_MULTICAST_ENABLED
+              value: "false"
+            - name: HZ_NETWORK_JOIN_TCP_IP_ENABLED
+              value: "true"
+            - name: HZ_NETWORK_JOIN_TCP_IP_MEMBERS
+              value: "hazelcast-0.hazelcast.bank.svc.cluster.local,hazelcast-1.hazelcast.bank.svc.cluster.local,hazelcast-2.hazelcast.bank.svc.cluster.local"
+          readinessProbe:
+            tcpSocket:
+              port: 5701
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 5701
+            initialDelaySeconds: 30
+            periodSeconds: 15
